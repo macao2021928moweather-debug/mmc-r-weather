@@ -5,6 +5,9 @@ on:
     - cron: '0 0 * * *'
   workflow_dispatch:
 
+env:
+  TZ: Asia/Macau
+
 concurrency:
   group: weather-daemon-single
   cancel-in-progress: false
@@ -35,10 +38,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install osmnx geopandas matplotlib pandas requests
 
-      - name: Run 5.5-Hour Loop (10 Mins Interval)
+      - name: Run 5.5-Hour Loop (5 Mins Interval)
         run: |
           END_TIME=$(($(date +%s) + 19800))
-          INTERVAL=600 
+          INTERVAL=300 # 5 分鐘
 
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -73,7 +76,7 @@ jobs:
             cd $GITHUB_WORKSPACE
             git worktree remove /tmp/gh-pages --force
 
-            echo "⏳ 休眠 10 分鐘..."
+            echo "⏳ 休眠 5 分鐘..."
             sleep $INTERVAL
           done
 
