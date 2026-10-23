@@ -1,0 +1,88 @@
+name: Macau Weather Daemon (Self-Renewing)
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: weather-daemon-single
+  cancel-in-progress: false
+
+jobs:
+  run-weather-loop:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies and Fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk 
+          python -m pip install --upgrade pip
+          pip install osmnx geopandas matplotlib pandas requests
+
+      - name: Run 5.5-Hour Loop (10 Mins Interval)
+        run: |
+          END_TIME=$(($(date +%s) + 19800))
+          INTERVAL=600 
+
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          while [ $(date +%s) -lt $END_TIME ]; do
+            echo "=================================================================="
+            echo "   🇲🇴 澳門氣象中心 - 實時更新循環 ($(date))"
+            echo "=================================================================="
+
+            git fetch origin gh-pages || true
+            git checkout origin/gh-pages -- history.db || true
+            git checkout origin/gh-pages -- cache/ || true
+            git checkout origin/gh-pages -- status.json || true
+
+            python app.py || echo "⚠️ app.py 執行出錯，跳過此輪"
+
+            echo "🚀 推送到 gh-pages 分支..."
+            git worktree add /tmp/gh-pages gh-pages || git worktree add -b gh-pages /tmp/gh-pages
+            
+            cp -r static/images/* /tmp/gh-pages/static/images/ 2>/dev/null || mkdir -p /tmp/gh-pages/static/images && cp -r static/images/* /tmp/gh-pages/static/images/
+            cp history.db /tmp/gh-pages/ 2>/dev/null || true
+            cp status.json /tmp/gh-pages/ 2>/dev/null || true
+            mkdir -p /tmp/gh-pages/cache && cp -r cache/* /tmp/gh-pages/cache/ 2>/dev/null || true
+
+            cd /tmp/gh-pages
+            git update-ref -d refs/heads/gh-pages || true
+            git checkout -b gh-pages
+            git add -A
+            git commit -m "Auto update: $(date) [Single Daemon]"
+            git push origin gh-pages --force || echo "❌ 推送失敗，下一輪重試..."
+            
+            cd $GITHUB_WORKSPACE
+            git worktree remove /tmp/gh-pages --force
+
+            echo "⏳ 休眠 10 分鐘..."
+            sleep $INTERVAL
+          done
+
+          echo "⌛ 5.5 小時已到，準備交接給下一個任務..."
+
+      - name: Trigger Self-Renewal (Handoff)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "⚡ 觸發下一個 5.5 小時任務..."
+          gh workflow run update.yml --ref main
