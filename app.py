@@ -173,7 +173,7 @@ def draw_base_map(ax, bg_color='#C4E1F5'):
     ax.set_axis_off()
 
 # ==========================================
-# 核心執行函數 (🌟 顏色全部改為高亮度馬卡龍色系)
+# 核心執行函數
 # ==========================================
 def update_weather_data():
     global update_time_str
@@ -243,60 +243,59 @@ def update_weather_data():
 
     save_to_db(stations, update_time_str)
 
-    # 🌟 微調顏色 1：氣溫 (全部採用明亮淺色)
     def get_temp_c(t):
         if t is None: return "#E0E0E0", "black"
-        if t >= 36: return "#FF8A80", "black"    # 淺紅
-        elif t >= 32.5: return "#FFB4A2", "black"  # 淺粉紅
-        elif t >= 28: return "#FFCC80", "black"    # 淺橙
-        elif t >= 23: return "#FFE082", "black"    # 淺黃橙
-        elif t >= 18: return "#FFF59D", "black"    # 淺黃
-        elif t >= 12.5: return "#C5E1A5", "black"  # 淺綠
-        elif t >= 8: return "#A7FFEB", "black"     # 淺青
-        elif t >= 5: return "#90CAF9", "black"     # 淺藍
-        else: return "#CE93D8", "black"            # 淺紫
+        if t >= 36: return "#FF8A80", "black"
+        elif t >= 32.5: return "#FFB4A2", "black"
+        elif t >= 28: return "#FFCC80", "black"
+        elif t >= 23: return "#FFE082", "black"
+        elif t >= 18: return "#FFF59D", "black"
+        elif t >= 12.5: return "#C5E1A5", "black"
+        elif t >= 8: return "#A7FFEB", "black"
+        elif t >= 5: return "#90CAF9", "black"
+        else: return "#CE93D8", "black"
 
-    # 🌟 微調顏色 2：濕度
     def get_humid_c(h):
         if h is None: return "#E0E0E0", "black"
-        if h <= 30: return "#FFCC80", "black"    # 淺橙
-        elif h <= 50: return "#FFF59D", "black"    # 淺黃
-        elif h <= 85: return "#A5D6A7", "black"    # 淺綠
-        elif h <= 95: return "#90CAF9", "black"    # 淺藍
-        else: return "#CE93D8", "black"            # 淺紫
+        if h <= 30: return "#FFCC80", "black"
+        elif h <= 50: return "#FFF59D", "black"
+        elif h <= 85: return "#A5D6A7", "black"
+        elif h <= 95: return "#90CAF9", "black"
+        else: return "#CE93D8", "black"
 
-    # 🌟 微調顏色 3：降水 (小時)
+    # 🌟 微調顏色 3：降水 (小時) - 最高級改為淺紫
     def get_hourly_rain_c(a):
-        if a is None or a == 0: return "#EEEEEE", "black" # 極淺灰
-        elif a < 20: return "#B3E5FC", "black"     # 淺藍
-        elif a < 50: return "#FFF59D", "black"     # 淺黃
-        elif a < 70: return "#FFCC80", "black"     # 淺橙
-        elif a < 100: return "#FF8A80", "black"    # 淺紅
-        else: return "#CFD8DC", "black"            # 淺藍灰 (代替深黑)
+        if a is None or a == 0: return "#EEEEEE", "black"
+        elif a < 20: return "#B3E5FC", "black"
+        elif a < 50: return "#FFF59D", "black"
+        elif a < 70: return "#FFCC80", "black"
+        elif a < 100: return "#FF8A80", "black"
+        else: return "#CE93D8", "black"  # 淺紫
 
-    # 🌟 微調顏色 4：降水 (日)
+    # 🌟 微調顏色 4：降水 (日) - 最高級改為淺紫
     def get_daily_rain_c(a):
         if a is None or a == 0: return "#EEEEEE", "black"
         elif a < 25: return "#B3E5FC", "black"
         elif a < 50: return "#FFF59D", "black"
         elif a < 100: return "#FFCC80", "black"
         elif a < 250: return "#FF8A80", "black"
-        else: return "#CFD8DC", "black"
+        else: return "#CE93D8", "black"  # 淺紫
 
-    # 🌟 微調顏色 5：風速
     def get_wind_c(s):
         if s is None: return "#E0E0E0", "black"
-        if s < 20: return "#FFFFFF", "black"       # 白
-        elif s <= 40: return "#A5D6A7", "black"    # 淺綠
-        elif s <= 62: return "#FFF59D", "black"    # 淺黃
-        elif s <= 117: return "#FFCC80", "black"   # 淺橙
-        else: return "#FF8A80", "black"            # 淺紅
+        if s < 20: return "#FFFFFF", "black"
+        elif s <= 40: return "#A5D6A7", "black"
+        elif s <= 62: return "#FFF59D", "black"
+        elif s <= 117: return "#FFCC80", "black"
+        else: return "#FF8A80", "black"
 
-    # 圖例也同步更新
     t_legend = [("極端酷熱", "#FF8A80"), ("酷熱", "#FFB4A2"), ("炎熱", "#FFCC80"), ("溫暖", "#FFE082"), ("和暖", "#FFF59D"), ("清涼", "#C5E1A5"), ("寒冷", "#A7FFEB"), ("嚴寒", "#90CAF9"), ("極端嚴寒", "#CE93D8")]
     h_legend = [("極為乾燥", "#FFCC80"), ("乾燥", "#FFF59D"), ("舒適", "#A5D6A7"), ("潮濕", "#90CAF9"), ("極為潮濕", "#CE93D8")]
-    rh_legend = [("0-20mm", "#B3E5FC"), ("20-50mm", "#FFF59D"), ("50-70mm", "#FFCC80"), ("70-100mm", "#FF8A80"), (">100mm", "#CFD8DC")]
-    rd_legend = [("0-25mm", "#B3E5FC"), ("25-50mm", "#FFF59D"), ("50-100mm", "#FFCC80"), ("100-250mm", "#FF8A80"), (">250mm", "#CFD8DC")]
+    
+    # 🌟 圖例同步更新為淺紫
+    rh_legend = [("0-20mm", "#B3E5FC"), ("20-50mm", "#FFF59D"), ("50-70mm", "#FFCC80"), ("70-100mm", "#FF8A80"), (">100mm", "#CE93D8")]
+    rd_legend = [("0-25mm", "#B3E5FC"), ("25-50mm", "#FFF59D"), ("50-100mm", "#FFCC80"), ("100-250mm", "#FF8A80"), (">250mm", "#CE93D8")]
+    
     w_legend = [("0-3級", "#FFFFFF"), ("4-5級", "#A5D6A7"), ("6-7級", "#FFF59D"), ("8-11級", "#FFCC80"), ("12級", "#FF8A80")]
 
     tasks = [
@@ -328,7 +327,6 @@ def update_weather_data():
             if key in ['wind_speed', 'gust_speed']:
                 b_c, t_c = get_wind_c(val)
                 val_str = f"{val:g}"
-                # 統一黑字，保留白邊框以增加對比度
                 ax.annotate(val_str, xy=(lon, lat), ha='center', va='center', fontsize=11, color='black', fontweight='bold', bbox=dict(boxstyle="round,pad=0.3", facecolor=b_c, edgecolor="#FFFFFF", linewidth=1.5), zorder=4)
             
             elif key == 'wind_dir':
@@ -344,7 +342,6 @@ def update_weather_data():
             else:
                 b_c, t_c = c_func(val)
                 val_str = f"{val:g}"
-                # 統一黑字，保留白邊框以增加對比度
                 ax.annotate(val_str, xy=(lon, lat), ha='center', va='center', fontsize=11, color='black', fontweight='bold', bbox=dict(boxstyle="round,pad=0.3", facecolor=b_c, edgecolor="white", linewidth=1.5), zorder=4)
                             
         if legend_data:
@@ -366,6 +363,10 @@ def update_weather_data():
         json.dump({"update_time": update_time_str}, f, ensure_ascii=False)
         
     print(f"✅ 全部圖片生成完成！時間：{update_time_str}")
+
+if __name__ == '__main__':
+    init_db()
+    update_weather_data()
 
 if __name__ == '__main__':
     init_db()
