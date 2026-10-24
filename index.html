@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>澳門氣象中心 實時天氣</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        :root { --primary: #1abc9c; --bg: #f8f9fa; --text: #2c3e50; }
+        body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        
+        /* 🌟 修改了 Header 的樣式，讓標題居中 */
+        .header { display: flex; justify-content: center; align-items: center; max-width: 1200px; margin: 0 auto 20px; padding: 15px 20px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .header h1 { margin: 0; color: var(--primary); font-size: 24px;}
+        
+        .tabs { display: flex; gap: 10px; max-width: 1200px; margin: 0 auto 20px; flex-wrap: wrap; justify-content: center;}
+        .tab { padding: 10px 20px; background: white; border-radius: 8px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 6px rgba(0,0,0,0.05); transition: all 0.3s; }
+        .tab:hover { background: #e9ecef; }
+        .tab.active { background: var(--primary); color: white; }
+        
+        .container { max-width: 1200px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.1); padding: 20px; min-height: 600px; position: relative; display: flex; flex-direction: column; align-items: center; }
+        .map-image, .chart-image { max-width: 100%; height: auto; display: block; }
+        
+        .control-panel { display: flex; gap: 20px; width: 100%; margin-bottom: 20px; padding: 20px; background: #f8f9fa; border-radius: 8px; border: 1px solid #eee; }
+        .control-group { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+        .control-group label { font-weight: bold; font-size: 14px; color: #555; }
+        .control-group select { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 15px; outline: none; }
+        
+        .loading-mask { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.85); display: flex; justify-content: center; align-items: center; font-size: 20px; font-weight: bold; color: var(--primary); z-index: 10; border-radius: 12px; }
+        .error-text { color: #e74c3c; font-weight: bold; margin-top: 50px; font-size: 18px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <h1>🇲🇴 澳門氣象中心 - 實時天氣</h1>
+        </div>
+
+        <div class="tabs">
+            <div v-for="tab in tabs" :key="tab.id" :class="['tab', { active: currentTab === tab.id }]" @click="switchTab(tab.id)">
+                {{ tab.name }}
+            </div>
+        </div>
+
+        <div class="container">
+            <div v-if="isLoading" class="loading-mask">⏳ 載入圖片中，請稍候...</div>
+
+            <div v-if="currentTab !== 'chart'" style="width: 100%; display: flex; justify-content: center;">
+                <img :src="getImageUrl()" class="map-image" alt="天氣圖表" @load="isLoading = false" @error="isLoading = false" />
+            </div>
+
+            <div v-else style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+                <div class="control-panel">
+                    <div class="control-group">
+                        <label>選擇站點</label>
+                        <select v-model="selectedStation" @change="updateChartUrl">
+                            <option v-for="st in stationsList" :key="st" :value="st">{{ st }}</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>選擇氣象要素</label>
+                        <select v-model="selectedMetric" @change="updateChartUrl">
+                            <option value="temp">🌡️ 氣溫</option>
+                            <option value="humidity">💧 相對濕度</option>
+                            <option value="wind_speed">🌬️ 風速</option>
+                            <option value="rain">🌧️ 降水量</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div v-if="chartError" class="error-text">{{ chartError }}</div>
+                <img v-if="!chartError && dynamicChartUrl" :src="dynamicChartUrl" class="chart-image" alt="歷史折線圖" @load="isLoading = false" @error="isLoading = false" />
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const currentTab = ref('temp_now');
+                const timestamp = ref(Date.now()); 
+                const isLoading = ref(false);
+
+                const stationsList = [
+                    "紀念孫中山公園", "黑沙環", "大炮臺", "外港碼頭", "媽閣", 
+                    "大潭山", "東亞運大馬路", "澳門大學", "九澳", "路環",
+                    "友誼大橋北", "友誼大橋南", "澳門大橋北", "澳門大橋南", 
+                    "嘉樂庇總督大橋", "西灣大橋", "蓮花大橋"
+                ];
+                const bridgeStations = ["友誼大橋北", "友誼大橋南", "澳門大橋北", "澳門大橋南", "嘉樂庇總督大橋", "西灣大橋", "蓮花大橋"];
+
+                const selectedStation = ref('大炮臺');
+                const selectedMetric = ref('temp');
+                const dynamicChartUrl = ref('');
+                const chartError = ref('');
+
+                const tabs = [
+                    { id: 'temp_now', name: '🌡️ 現時氣溫' },
+                    { id: 'temp_max', name: '🔥 最高氣溫' },
+                    { id: 'temp_min', name: '❄️ 最低氣溫' },
+                    { id: 'humidity', name: '💧 相對濕度' },
+                    { id: 'rain_h', name: '🌧️ 一小時降水' },
+                    { id: 'rain_d', name: '☔ 今日累計降水' },
+                    { id: 'wind_speed', name: '🌬️ 實時風速' },
+                    { id: 'gust_speed', name: '💨 陣風風速' },
+                    { id: 'wind_dir', name: '🧭 風向分佈' },
+                    { id: 'chart', name: '📈 歷史折線圖' }
+                ];
+
+                const getImageUrl = () => `./static/images/${currentTab.value}.png?t=${timestamp.value}`;
+
+                const updateChartUrl = () => {
+                    isLoading.value = true;
+                    chartError.value = '';
+                    
+                    if (bridgeStations.includes(selectedStation.value) && selectedMetric.value !== 'wind_speed') {
+                        chartError.value = "⚠️ 大橋站點沒有該氣象要素數據，請選擇風速。";
+                        dynamicChartUrl.value = '';
+                        isLoading.value = false;
+                        return;
+                    }
+                    
+                    dynamicChartUrl.value = `./static/images/line_${selectedStation.value}_${selectedMetric.value}.png?t=${timestamp.value}`;
+                };
+
+                const switchTab = (tabId) => {
+                    currentTab.value = tabId;
+                    if (tabId === 'chart') {
+                        updateChartUrl();
+                    } else {
+                        isLoading.value = true;
+                        chartError.value = '';
+                        dynamicChartUrl.value = '';
+                    }
+                };
+
+                onMounted(() => {
+                    // 網頁載入時更新一次時間戳，確保加載最新圖片
+                    timestamp.value = Date.now();
+                });
+
+                return { 
+                    tabs, currentTab, isLoading, 
+                    stationsList, selectedStation, selectedMetric, dynamicChartUrl, chartError,
+                    getImageUrl, switchTab, updateChartUrl 
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
