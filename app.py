@@ -212,10 +212,29 @@ def update_weather_data():
         
         pub_date_node = root.find('.//SysPubDate')
         if pub_date_node is not None and pub_date_node.text:
-            update_time_str = pub_date_node.text.strip()
+            raw_time = pub_date_node.text.strip()
+            # 🌟 嚴格處理時間：抓取 YYYY-MM-DD HH:MM 並強制把分鐘數變成 0 或 5 的尾數
+            try:
+                dt = datetime.strptime(raw_time, "%Y-%m-%d %H:%M")
+                # 分鐘數向下取整到最近的 5 分鐘
+                minute = (dt.minute // 5) * 5
+                dt = dt.replace(minute=minute)
+                update_time_str = dt.strftime("%Y-%m-%d %H:%M")
+            except ValueError:
+                update_time_str = raw_time
         else:
             match = re.search(r'<SysPubDate>(.*?)</SysPubDate>', res.text, re.DOTALL)
-            update_time_str = match.group(1).strip() if match else datetime.now(MACAU_TZ).strftime('%Y-%m-%d %H:%M')
+            if match:
+                raw_time = match.group(1).strip()
+                try:
+                    dt = datetime.strptime(raw_time, "%Y-%m-%d %H:%M")
+                    minute = (dt.minute // 5) * 5
+                    dt = dt.replace(minute=minute)
+                    update_time_str = dt.strftime("%Y-%m-%d %H:%M")
+                except ValueError:
+                    update_time_str = raw_time
+            else:
+                update_time_str = datetime.now(MACAU_TZ).strftime('%Y-%m-%d %H:%M')
     except Exception as e:
         update_time_str = datetime.now(MACAU_TZ).strftime('%Y-%m-%d %H:%M')
 
@@ -336,7 +355,7 @@ def update_weather_data():
                 try: deg = float(val)
                 except ValueError: deg = dir_map.get(str(val).upper(), 0)
                 
-                # 🌟 核心修改：移除 +180，讓箭頭直接指向風向來源
+                # 箭頭直接指向風向來源 (移除了 +180)
                 angle = deg % 360 
                 
                 coords = np.array([[0, 1.5], [-0.8, -0.8], [0, -0.3], [0.8, -0.8]])
