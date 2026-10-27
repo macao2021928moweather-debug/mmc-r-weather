@@ -335,7 +335,10 @@ def update_weather_data():
                 dir_map = {'N':0, 'NNE':22.5, 'NE':45, 'ENE':67.5, 'E':90, 'ESE':112.5, 'SE':135, 'SSE':157.5, 'S':180, 'SSW':202.5, 'SW':225, 'WSW':247.5, 'W':270, 'WNW':292.5, 'NW':315, 'NNW':337.5}
                 try: deg = float(val)
                 except ValueError: deg = dir_map.get(str(val).upper(), 0)
-                angle = (deg + 180) % 360 
+                
+                # 🌟 核心修改：移除 +180，讓箭頭直接指向風向來源
+                angle = deg % 360 
+                
                 coords = np.array([[0, 1.5], [-0.8, -0.8], [0, -0.3], [0.8, -0.8]])
                 t = transforms.Affine2D().rotate_deg(angle).scale(0.002).translate(lon, lat) + ax.transData
                 ax.add_patch(Polygon(coords, closed=True, facecolor='#2C3E50', edgecolor='white', linewidth=0.8, transform=t, zorder=5))
