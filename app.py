@@ -74,7 +74,6 @@ def save_to_db(stations, current_time_str):
     conn = sqlite3.connect(DB_PATH, timeout=10)
     c = conn.cursor()
     today_str = datetime.now(MACAU_TZ).strftime('%Y-%m-%d')
-    # 每天午夜 00:00 清空前一天的數據
     c.execute("DELETE FROM weather_history WHERE time_str NOT LIKE ?", (today_str + '%',))
     
     now_ts = time.time()
@@ -89,7 +88,7 @@ def save_to_db(stations, current_time_str):
     conn.close()
 
 # ==========================================
-# 折線圖與柱狀圖批量生成 (全新配色)
+# 折線圖與柱狀圖批量生成
 # ==========================================
 def generate_all_line_charts():
     conn = sqlite3.connect(DB_PATH, timeout=10)
@@ -112,7 +111,6 @@ def generate_all_line_charts():
             fig, ax = plt.subplots(figsize=(14, 6))
             fig.patch.set_facecolor('white')
             
-            # 如果沒有數據，生成空白提示圖
             if valid_df.empty:
                 ax.text(0.5, 0.5, '暫無數據 No Data', transform=ax.transAxes, 
                         fontsize=24, color='gray', ha='center', va='center')
@@ -124,12 +122,9 @@ def generate_all_line_charts():
                 plt.close(fig)
                 continue
             
-            # 根據要素繪製圖表
             if col == 'rain':
-                # 降水：藍色柱狀圖
                 ax.bar(valid_df['datetime'], valid_df[col], width=pd.Timedelta(minutes=4), color='blue', alpha=0.8)
             else:
-                # 折線：氣溫(紅)、濕度(淺藍)、風速(黑)
                 line_color = 'red' if col == 'temp' else ('skyblue' if col == 'humidity' else 'black')
                 ax.plot(valid_df['datetime'], valid_df[col], linewidth=1.5, color=line_color)
             
@@ -140,7 +135,6 @@ def generate_all_line_charts():
             new_ymin = (ymin - y_buffer) if col == 'temp' else max(0, ymin - y_buffer)
             ax.set_ylim(new_ymin, ymax + y_buffer)
 
-            # 灰色網格
             ax.grid(True, linestyle='--', color='gray', alpha=0.6)
             ax.xaxis.set_major_formatter(DateFormatter('%HH'))
             
@@ -213,10 +207,8 @@ def update_weather_data():
         pub_date_node = root.find('.//SysPubDate')
         if pub_date_node is not None and pub_date_node.text:
             raw_time = pub_date_node.text.strip()
-            # 🌟 嚴格處理時間：抓取 YYYY-MM-DD HH:MM 並強制把分鐘數變成 0 或 5 的尾數
             try:
                 dt = datetime.strptime(raw_time, "%Y-%m-%d %H:%M")
-                # 分鐘數向下取整到最近的 5 分鐘
                 minute = (dt.minute // 5) * 5
                 dt = dt.replace(minute=minute)
                 update_time_str = dt.strftime("%Y-%m-%d %H:%M")
@@ -255,18 +247,30 @@ def update_weather_data():
         x_name = clean_name(n_node.text.strip().replace('纪','紀').replace('孙','孫').replace('园','園').replace('台','臺').replace('妈','媽').replace('阁','閣').replace('东','東').replace('运','運').replace('学','學').replace('莲','蓮').replace('桥','橋'))
         m_key = next((k for k in STATION_COORDS if clean_name(k) in x_name or x_name in clean_name(k)), None)
         if not m_key: continue
+        
         stations[m_key]['temp_max'] = get_val(st.find('Temperature_daily_max'))
         stations[m_key]['temp_now'] = get_val(st.find('Temperature'))
         stations[m_key]['temp_min'] = get_val(st.find('Temperature_daily_min'))
         stations[m_key]['humidity'] = get_val(st.find('Humidity'))
-        h_rain, d_rain = None, None
-        for el in st:
-            tag = el.tag.lower()
-            if 'rain' in tag or 'precip' in tag:
-                if 'hour' in tag or '1h' in tag: h_rain = get_val(el)
-                elif 'day' in tag or 'daily' in tag: d_rain = get_val(el)
-                elif tag in ['rainfall', 'precipitation']: h_rain = d_rain = get_val(el)
-        stations[m_key]['rain_h'] = h_rain; stations[m_key]['rain_d'] = d_rain
+        
+        # 🌟 核心修改：精準解析 SMG 的降雨分類 (Type 4 為小時，Type 5 為日累計)
+        h_rain, d_rain = 0.0, None
+        for el in st.findall('Rainfall'):
+            type_node = el.find('Type')
+            if type_node is not None and type_node.text:
+                r_type = type_node.text.strip()
+                val = get_val(el)
+                if r_type == '5': # 日累計
+                    d_rain = val
+                elif r_type == '4': # 小時級
+                    h_rain = val
+                # Type 3 (分鐘級) 直接忽略
+        
+        if d_rain is None: d_rain = 0.0
+        
+        stations[m_key]['rain_h'] = h_rain
+        stations[m_key]['rain_d'] = d_rain
+        
         for el in st.iter():
             tag = el.tag.split('}')[-1].lower()
             if tag in ['windspeed', 'wind']:
@@ -355,7 +359,6 @@ def update_weather_data():
                 try: deg = float(val)
                 except ValueError: deg = dir_map.get(str(val).upper(), 0)
                 
-                # 箭頭直接指向風向來源 (移除了 +180)
                 angle = deg % 360 
                 
                 coords = np.array([[0, 1.5], [-0.8, -0.8], [0, -0.3], [0.8, -0.8]])
