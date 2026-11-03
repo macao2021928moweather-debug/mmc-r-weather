@@ -204,31 +204,17 @@ def update_weather_data():
         res.encoding = 'utf-8'
         root = ET.fromstring(res.content)
         
-        pub_date_node = root.find('.//SysPubDate')
+        # 🌟 修改：精確讀取 SysPubdate，解決大小寫問題
+        pub_date_node = root.find('.//SysPubdate')
         if pub_date_node is not None and pub_date_node.text:
             raw_time = pub_date_node.text.strip()
-            try:
-                dt = datetime.strptime(raw_time, "%Y-%m-%d %H:%M")
-                minute = (dt.minute // 5) * 5
-                dt = dt.replace(minute=minute)
-                update_time_str = dt.strftime("%Y-%m-%d %H:%M")
-            except ValueError:
-                update_time_str = raw_time
+            update_time_str = raw_time # 直接保留原始時間，不再做向下取整
         else:
-            match = re.search(r'<SysPubDate>(.*?)</SysPubDate>', res.text, re.DOTALL)
-            if match:
-                raw_time = match.group(1).strip()
-                try:
-                    dt = datetime.strptime(raw_time, "%Y-%m-%d %H:%M")
-                    minute = (dt.minute // 5) * 5
-                    dt = dt.replace(minute=minute)
-                    update_time_str = dt.strftime("%Y-%m-%d %H:%M")
-                except ValueError:
-                    update_time_str = raw_time
-            else:
-                update_time_str = datetime.now(MACAU_TZ).strftime('%Y-%m-%d %H:%M')
+            print("❌ 錯誤：找不到 XML 中的 SysPubdate 標籤")
+            sys.exit(1)
     except Exception as e:
-        update_time_str = datetime.now(MACAU_TZ).strftime('%Y-%m-%d %H:%M')
+        print(f"❌ 錯誤：無法獲取 XML 數據 - {e}")
+        sys.exit(1)
 
     stations = {name: coords.copy() for name, coords in STATION_COORDS.items()}
     def clean_name(n): return n.replace("市政", "").replace("氣象站", "").replace("站", "").strip()
@@ -253,7 +239,7 @@ def update_weather_data():
         stations[m_key]['temp_min'] = get_val(st.find('Temperature_daily_min'))
         stations[m_key]['humidity'] = get_val(st.find('Humidity'))
         
-        # 🌟 核心修改：精準解析 SMG 的降雨分類 (Type 4 為小時，Type 5 為日累計)
+        # 🌟 精準解析 SMG 的降雨分類 (Type 4 為小時，Type 5 為日累計)
         h_rain, d_rain = 0.0, None
         for el in st.findall('Rainfall'):
             type_node = el.find('Type')
@@ -264,7 +250,6 @@ def update_weather_data():
                     d_rain = val
                 elif r_type == '4': # 小時級
                     h_rain = val
-                # Type 3 (分鐘級) 直接忽略
         
         if d_rain is None: d_rain = 0.0
         
