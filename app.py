@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from matplotlib.patches import Polygon
 from matplotlib import transforms
+import matplotlib.dates as mdates
 from matplotlib.dates import DateFormatter
 import numpy as np
 import pandas as pd
@@ -76,7 +77,13 @@ def save_to_db(stations, current_time_str):
     today_str = datetime.now(MACAU_TZ).strftime('%Y-%m-%d')
     c.execute("DELETE FROM weather_history WHERE time_str NOT LIKE ?", (today_str + '%',))
     
-    now_ts = time.time()
+    # 🌟 修改：使用氣象局給的 current_time_str 轉成 Timestamp，確保資料庫時間完全對齊觀測時間
+    try:
+        dt_obj = datetime.strptime(current_time_str, "%Y-%m-%d %H:%M").replace(tzinfo=MACAU_TZ)
+        now_ts = dt_obj.timestamp()
+    except:
+        now_ts = time.time()
+        
     for name, data in stations.items():
         if any(data.get(k) is not None for k in ['temp_now', 'humidity', 'wind_speed', 'rain_h']):
             c.execute('''INSERT INTO weather_history 
@@ -96,7 +103,9 @@ def generate_all_line_charts():
     conn.close()
 
     if df.empty: return
-    df['datetime'] = pd.to_datetime(df['timestamp'], unit='s', utc=True).dt.tz_convert('Asia/Macau').dt.tz_localize(None)
+    
+    # 🌟 修改：直接解析 time_str 作為 X 軸時間，這是最精準的做法
+    df['datetime'] = pd.to_datetime(df['time_str'])
 
     for station_name in STATION_COORDS.keys():
         st_df = df[df['station'] == station_name]
@@ -126,7 +135,8 @@ def generate_all_line_charts():
                 ax.bar(valid_df['datetime'], valid_df[col], width=pd.Timedelta(minutes=4), color='blue', alpha=0.8)
             else:
                 line_color = 'red' if col == 'temp' else ('skyblue' if col == 'humidity' else 'black')
-                ax.plot(valid_df['datetime'], valid_df[col], linewidth=1.5, color=line_color)
+                # 🌟 加上 marker='o' 顯示真實數據點位置
+                ax.plot(valid_df['datetime'], valid_df[col], linewidth=1.5, color=line_color, marker='o', markersize=3)
             
             ax.relim()
             ax.autoscale_view()
@@ -136,7 +146,14 @@ def generate_all_line_charts():
             ax.set_ylim(new_ymin, ymax + y_buffer)
 
             ax.grid(True, linestyle='--', color='gray', alpha=0.6)
+            
+            # 🌟 修改：強制定位 X 軸刻度與固定顯示範圍 00:00 - 24:00
+            ax.xaxis.set_major_locator(mdates.HourLocator(byhour=range(0, 24, 2)))
             ax.xaxis.set_major_formatter(DateFormatter('%HH'))
+            
+            today_start = pd.Timestamp(datetime.now(MACAU_TZ).date())
+            today_end = today_start + pd.Timedelta(days=1)
+            ax.set_xlim(today_start, today_end)
             
             ylabel_map = {
                 'temp': '溫度 Temperature (°C)', 'humidity': '濕度 Humidity (%)', 
@@ -204,11 +221,11 @@ def update_weather_data():
         res.encoding = 'utf-8'
         root = ET.fromstring(res.content)
         
-        # 🌟 修改：精確讀取 SysPubdate，解決大小寫問題
+        # 🌟 精確讀取 SysPubdate，解決大小寫問題
         pub_date_node = root.find('.//SysPubdate')
         if pub_date_node is not None and pub_date_node.text:
             raw_time = pub_date_node.text.strip()
-            update_time_str = raw_time # 直接保留原始時間，不再做向下取整
+            update_time_str = raw_time 
         else:
             print("❌ 錯誤：找不到 XML 中的 SysPubdate 標籤")
             sys.exit(1)
@@ -239,16 +256,16 @@ def update_weather_data():
         stations[m_key]['temp_min'] = get_val(st.find('Temperature_daily_min'))
         stations[m_key]['humidity'] = get_val(st.find('Humidity'))
         
-        # 🌟 精準解析 SMG 的降雨分類 (Type 4 為小時，Type 5 為日累計)
+        # 精準解析降雨分類 (Type 4 為小時，Type 5 為日累計)
         h_rain, d_rain = 0.0, None
         for el in st.findall('Rainfall'):
             type_node = el.find('Type')
             if type_node is not None and type_node.text:
                 r_type = type_node.text.strip()
                 val = get_val(el)
-                if r_type == '5': # 日累計
+                if r_type == '5':
                     d_rain = val
-                elif r_type == '4': # 小時級
+                elif r_type == '4':
                     h_rain = val
         
         if d_rain is None: d_rain = 0.0
