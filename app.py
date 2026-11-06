@@ -355,8 +355,9 @@ def update_weather_data():
                 try: deg = float(val)
                 except ValueError: deg = dir_map.get(str(val).upper(), 0)
                 
-                # 🌟 修正：讓箭頭指向與氣象局原圖一致的方向（風的來源）
-                angle = (360 - deg) % 360
+                # 🌟 修正：讓箭頭指向風吹去的方向（例如東北風吹向西南）
+                # 公式：180 - 風向度數
+                angle = 180 - deg
                 
                 coords = np.array([[0, 1.5], [-0.8, -0.8], [0, -0.3], [0.8, -0.8]])
                 t = transforms.Affine2D().rotate_deg(angle).scale(0.002).translate(lon, lat) + ax.transData
