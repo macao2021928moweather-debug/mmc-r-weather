@@ -77,7 +77,6 @@ def save_to_db(stations, current_time_str):
     today_str = datetime.now(MACAU_TZ).strftime('%Y-%m-%d')
     c.execute("DELETE FROM weather_history WHERE time_str NOT LIKE ?", (today_str + '%',))
     
-    # 🌟 修改：使用氣象局給的 current_time_str 轉成 Timestamp，確保資料庫時間完全對齊觀測時間
     try:
         dt_obj = datetime.strptime(current_time_str, "%Y-%m-%d %H:%M").replace(tzinfo=MACAU_TZ)
         now_ts = dt_obj.timestamp()
@@ -104,7 +103,6 @@ def generate_all_line_charts():
 
     if df.empty: return
     
-    # 🌟 修改：直接解析 time_str 作為 X 軸時間，這是最精準的做法
     df['datetime'] = pd.to_datetime(df['time_str'])
 
     for station_name in STATION_COORDS.keys():
@@ -135,7 +133,6 @@ def generate_all_line_charts():
                 ax.bar(valid_df['datetime'], valid_df[col], width=pd.Timedelta(minutes=4), color='blue', alpha=0.8)
             else:
                 line_color = 'red' if col == 'temp' else ('skyblue' if col == 'humidity' else 'black')
-                # 🌟 加上 marker='o' 顯示真實數據點位置
                 ax.plot(valid_df['datetime'], valid_df[col], linewidth=1.5, color=line_color, marker='o', markersize=3)
             
             ax.relim()
@@ -147,7 +144,6 @@ def generate_all_line_charts():
 
             ax.grid(True, linestyle='--', color='gray', alpha=0.6)
             
-            # 🌟 修改：強制定位 X 軸刻度與固定顯示範圍 00:00 - 24:00
             ax.xaxis.set_major_locator(mdates.HourLocator(byhour=range(0, 24, 2)))
             ax.xaxis.set_major_formatter(DateFormatter('%HH'))
             
@@ -221,7 +217,6 @@ def update_weather_data():
         res.encoding = 'utf-8'
         root = ET.fromstring(res.content)
         
-        # 🌟 精確讀取 SysPubdate，解決大小寫問題
         pub_date_node = root.find('.//SysPubdate')
         if pub_date_node is not None and pub_date_node.text:
             raw_time = pub_date_node.text.strip()
@@ -256,7 +251,6 @@ def update_weather_data():
         stations[m_key]['temp_min'] = get_val(st.find('Temperature_daily_min'))
         stations[m_key]['humidity'] = get_val(st.find('Humidity'))
         
-        # 精準解析降雨分類 (Type 4 為小時，Type 5 為日累計)
         h_rain, d_rain = 0.0, None
         for el in st.findall('Rainfall'):
             type_node = el.find('Type')
@@ -361,8 +355,8 @@ def update_weather_data():
                 try: deg = float(val)
                 except ValueError: deg = dir_map.get(str(val).upper(), 0)
                 
-                # 🌟 修正：將氣象風向轉換為地圖箭頭繪製角度
-                angle = (180 - deg) % 360
+                # 🌟 修正：讓箭頭指向與氣象局原圖一致的方向（風的來源）
+                angle = (360 - deg) % 360
                 
                 coords = np.array([[0, 1.5], [-0.8, -0.8], [0, -0.3], [0.8, -0.8]])
                 t = transforms.Affine2D().rotate_deg(angle).scale(0.002).translate(lon, lat) + ax.transData
