@@ -361,7 +361,8 @@ def update_weather_data():
                 try: deg = float(val)
                 except ValueError: deg = dir_map.get(str(val).upper(), 0)
                 
-                angle = deg % 360 
+                # 🌟 修正：將氣象風向轉換為地圖箭頭繪製角度
+                angle = (180 - deg) % 360
                 
                 coords = np.array([[0, 1.5], [-0.8, -0.8], [0, -0.3], [0.8, -0.8]])
                 t = transforms.Affine2D().rotate_deg(angle).scale(0.002).translate(lon, lat) + ax.transData
